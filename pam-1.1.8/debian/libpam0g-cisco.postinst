@@ -113,8 +113,8 @@ then
 	    echo "Checking init scripts..."
 	    services=$(installed_services "$check")
 	    if [ -n "$services" ]; then
-		db_reset libpam0g/restart-services
-		db_set libpam0g/restart-services "$services"
+		db_reset libpam0g-cisco/restart-services
+		db_set libpam0g-cisco/restart-services "$services"
 		question_priority="critical"
 		# Do not prompt when we're running in the upgrade-manager
 		# and only default services need restarting.
@@ -132,11 +132,11 @@ then
 		db_go || true
 		db_get libraries/restart-without-asking
 		if [ "$RET" != true ]; then
-		    db_reset libpam0g/restart-services
-		    db_set libpam0g/restart-services "$services"
-		    db_input "$question_priority" libpam0g/restart-services || true
+		    db_reset libpam0g-cisco/restart-services
+		    db_set libpam0g-cisco/restart-services "$services"
+		    db_input "$question_priority" libpam0g-cisco/restart-services || true
 		    db_go || true
-		    db_get libpam0g/restart-services
+		    db_get libpam0g-cisco/restart-services
 
 		    if [ "x$RET" != "x" ]
 		    then
@@ -185,8 +185,8 @@ then
 		    done
 		    echo
 		    if [ -n "$failed" ]; then
-			db_subst libpam0g/restart-failed services "$failed"
-			db_input critical libpam0g/restart-failed || true
+			db_subst libpam0g-cisco/restart-failed services "$failed"
+			db_input critical libpam0g-cisco/restart-failed || true
 			db_go || true
 		    else
 			echo "Services restarted successfully."
@@ -212,7 +212,7 @@ then
 		    then
 			/usr/share/update-notifier/notify-reboot-required
 		    else
-			db_input critical libpam0g/xdm-needs-restart || true
+			db_input critical libpam0g-cisco/xdm-needs-restart || true
 			db_go || true
 		    fi
 		fi
