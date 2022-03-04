@@ -1,0 +1,37 @@
+From ca259506ed8e444c3b6233e0216343eb7f33c9fa Mon Sep 17 00:00:00 2001
+From: jeff squyres <jsquyres@cisco.com>
+Date: Fri, 25 Jun 2021 21:07:11 +0000
+Subject: [PATCH 2/2] pam_misc: set default length of misc_conv() buffer to
+ 4096
+
+NOTE: This patch file is a back port from the original
+      80bfda5962e5be3daa70e0fc8c75fc97d1c55121 commit on master in
+      June of 2021 to the Linux-PAM-1_1_8 tag.  configure.ac is named
+      configure.ac back at this tag, and the context surrounding the
+      changes are different.  But the content of the changes is
+      exactly the same.
+
+Signed-off-by: jeff squyres <jsquyres@cisco.com>
+---
+ configure.ac | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 9c6c373..f94c7ba 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -601,9 +601,9 @@ AM_CONDITIONAL([HAVE_KEY_MANAGEMENT], [test "$have_key_syscalls" = 1])
+ 
+ AC_ARG_WITH([misc-conv-bufsize],
+ AS_HELP_STRING([--with-misc-conv-bufsize=<number>],
+-    [Size of input buffer for libpam_misc's misc_conv() conversation function, default=512]),
++    [Size of input buffer for libpam_misc's misc_conv() conversation function, default=4096]),
+     [],
+-    [with_misc_conv_bufsize=512])
++    [with_misc_conv_bufsize=4096])
+ AC_DEFINE_UNQUOTED(PAM_MISC_CONV_BUFSIZE, $with_misc_conv_bufsize, [libpam_misc misc_conv() buffer size.])
+ 
+ dnl Files to be created from when we run configure
+-- 
+2.17.1
+

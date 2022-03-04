@@ -1,0 +1,24 @@
+From: Balint Reczey <balint.reczey@canonical.com>
+Date: Wed, 4 Dec 2019 11:48:45 +0100
+Subject: pam_motd: Export MOTD_SHOWN=pam after showing MOTD
+
+This is a useful indication for update-motd profile.d snippet which can
+also try to show MOTD when it is not already shown.
+
+The use-case for that is showing MOTD in shells in containers without
+PAM being involved.
+---
+ modules/pam_motd/pam_motd.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/modules/pam_motd/pam_motd.c
++++ b/modules/pam_motd/pam_motd.c
+@@ -232,6 +232,8 @@
+     /* Display the legal disclaimer only if necessary */
+     retval = display_legal(pamh);
+ 
++    retval = pam_putenv(pamh, "MOTD_SHOWN=pam");
++
+     return retval;
+ }
+ 

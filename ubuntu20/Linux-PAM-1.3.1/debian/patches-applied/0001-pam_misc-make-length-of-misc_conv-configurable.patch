@@ -1,0 +1,56 @@
+From ff3765ca4ddba3ad985c76a7f506ee1d2e626b47 Mon Sep 17 00:00:00 2001
+From: jeff squyres <jsquyres@cisco.com>
+Date: Fri, 25 Jun 2021 21:06:24 +0000
+Subject: [PATCH 1/2] pam_misc: make length of misc_conv() configurable
+
+Add --with-misc-conv-bufsize=<number> option to configure to allow a
+longer buffer size for libpam_misc's misc_conv() function (it still
+defaults to 512 bytes).
+
+Signed-off-by: Jeff Squyres <jsquyres@cisco.com>
+
+NOTE: This patch file is a back port from the original
+      55f206447a1e4ee26e307e7a9c069236e823b1a5 commit on master in
+      June of 2021 to the Linux-PAM-1_1_8 tag.  configure.ac is named
+      configure.ac back at this tag, and the context surrounding the
+      changes are different.  But the content of the changes is
+      exactly the same.
+---
+ configure.ac            | 7 +++++++
+ libpam_misc/misc_conv.c | 2 +-
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index d2ade50..9c6c373 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -599,6 +599,13 @@ AC_SUBST([HAVE_KEY_MANAGEMENT], $HAVE_KEY_MANAGEMENT)
+ 
+ AM_CONDITIONAL([HAVE_KEY_MANAGEMENT], [test "$have_key_syscalls" = 1])
+ 
++AC_ARG_WITH([misc-conv-bufsize],
++AS_HELP_STRING([--with-misc-conv-bufsize=<number>],
++    [Size of input buffer for libpam_misc's misc_conv() conversation function, default=512]),
++    [],
++    [with_misc_conv_bufsize=512])
++AC_DEFINE_UNQUOTED(PAM_MISC_CONV_BUFSIZE, $with_misc_conv_bufsize, [libpam_misc misc_conv() buffer size.])
++
+ dnl Files to be created from when we run configure
+ AC_CONFIG_FILES([Makefile libpam/Makefile libpamc/Makefile libpamc/test/Makefile \
+ 	libpam_misc/Makefile conf/Makefile conf/pam_conv1/Makefile \
+diff --git a/libpam_misc/misc_conv.c b/libpam_misc/misc_conv.c
+index 3f74eea..cd3f45b 100644
+--- a/libpam_misc/misc_conv.c
++++ b/libpam_misc/misc_conv.c
+@@ -18,7 +18,7 @@
+ #include <security/pam_appl.h>
+ #include <security/pam_misc.h>
+ 
+-#define INPUTSIZE PAM_MAX_MSG_SIZE           /* maximum length of input+1 */
++#define INPUTSIZE PAM_MISC_CONV_BUFSIZE      /* maximum length of input+1 */
+ #define CONV_ECHO_ON  1                            /* types of echo state */
+ #define CONV_ECHO_OFF 0
+ 
+-- 
+2.17.1
+
