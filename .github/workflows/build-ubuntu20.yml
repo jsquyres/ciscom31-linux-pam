@@ -1,0 +1,67 @@
+name: Build Ubuntu 20 package
+
+on:
+    pull_request:
+        # We don't need this to be run on all types of PR behavior
+        # See https://docs.github.com/en/actions/reference/events-that-trigger-workflows#pull_request
+        types:
+          - opened
+          - synchronize
+          - edited
+
+    # We want this run on a push to main, too, so that it creates
+    # Github releases with permanent artifacts.
+    push:
+      branches:
+        - main
+
+jobs:
+    build:
+        name: Build Ubuntu 20 package
+        runs-on: ubuntu-20.04
+        steps:
+          # This helps run the overall job faster
+          - name: Disable initramfs update
+            run: sudo sed -i 's/yes/no/g' /etc/initramfs-tools/update-initramfs.conf
+
+          # This helps run the overall job faster
+          - name: Disable man-db update
+            run: sudo rm -f /var/lib/man-db/auto-update
+
+          - name: Install required packages
+            run: |
+              sudo apt update
+              sudo apt install -y ubuntu-dev-tools debhelper apt-utils \
+                  libcrack2-dev flex libdb-dev libselinux1-dev libaudit-dev \
+                  pkg-config libfl-dev libfl-dev:native docbook-xsl docbook-xml \
+                  xsltproc libxml2-utils w3m bison
+
+          - name: Check out the code
+            uses: actions/checkout@v2
+
+          - name: Do the build
+            run: $GITHUB_WORKSPACE/ubuntu20/build.sh
+
+          - name: Upload the Ubuntu 20 artifact to the Github Action
+            uses: actions/upload-artifact@v2
+            with:
+              name: linuxpam-ubuntu20
+              path: ubuntu20/*.tar
+
+          # If this was a merge to main, make a release so that the
+          # artifact is kept permanently
+          - name: Create release tag
+            if: github.ref == 'refs/heads/main'
+            run: |
+              . $GITHUB_WORKSPACE/ubuntu20/env.sh
+              echo "::set-output name=TAG::pam_${SOURCE_PACKAGE_VERSION}${CISCO_VERSION}-build.${{ github.run_number }}"
+            id: tag
+
+          - name: Upload the Ubuntu 20 artifact to a Github release
+            uses: ncipollo/release-action@v1
+            if: github.ref == 'refs/heads/main'
+            with:
+              artifacts: "ubuntu20/*.tar"
+              commit: ${{ github.sha }}
+              tag: ${{ steps.tag.outputs.TAG }}
+              token: ${{ github.token }}
