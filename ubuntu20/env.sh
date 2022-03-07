@@ -31,7 +31,7 @@ export CISCO_VERSION=+1cisco1
 # Info about the source
 export UPSTREAM_VERSION=1.3.1
 export UPSTREAM_DIR=$GITHUB_WORKSPACE/ubuntu20/Linux-PAM-${UPSTREAM_VERSION}
-export SOURCE_PACKAGE_VERSION=${UPSTREAM_VERSION}-5ubuntu4.2
+export SOURCE_PACKAGE_VERSION=${UPSTREAM_VERSION}-5ubuntu4.3
 
 # Name of the output directory and tarball
 export OUTNAME=libpam0g-ubuntu20-with-4k-misc-buffer
