@@ -23,10 +23,10 @@ else
     fi
 fi
 
-# The rest of this env.sh is specific to the Ubuntu 18 package
+# The rest of this env.sh is specific to the Ubuntu 20 package
 
 # Cisco version
-export CISCO_VERSION=+1cisco1
+export CISCO_VERSION=+1cisco2
 
 # Info about the source
 export UPSTREAM_VERSION=1.3.1
