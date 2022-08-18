@@ -33,3 +33,5 @@ fix-autoreconf.patch
 0003-Return-only-PAM_IGNORE-or-error-from-pam_motd.patch
 add_pam_faillock.patch
 pam_faillock_create_directory
+0001-pam_misc-make-length-of-misc_conv-configurable.patch
+0002-pam_misc-set-default-length-of-misc_conv-buffer-to-4.patch
