@@ -1,0 +1,64 @@
+name: Build Alma 8 package
+
+on:
+    pull_request:
+        # We don't need this to be run on all types of PR behavior
+        # See https://docs.github.com/en/actions/reference/events-that-trigger-workflows#pull_request
+        types:
+          - opened
+          - synchronize
+          - edited
+
+    # We want this run on a push to main, too, so that it creates
+    # Github releases with permanent artifacts.
+    push:
+      branches:
+        - main
+
+jobs:
+    build:
+        name: Build Alma 8 package
+        # Github only has Ubuntu runners, so we use one of those, and
+        # build the Alma package in a container in the Ubuntu runner.
+        runs-on: ubuntu-22.04
+        steps:
+          # This helps run the overall job faster
+          - name: Disable initramfs update
+            run: sudo sed -i 's/yes/no/g' /etc/initramfs-tools/update-initramfs.conf
+
+          # This helps run the overall job faster
+          - name: Disable man-db update
+            run: sudo rm -f /var/lib/man-db/auto-update
+
+          - name: Install Docker snap
+            run: sudo snap install docker
+
+          - name: Check out the code
+            uses: actions/checkout@v2
+
+          - name: Do the build
+            run: $GITHUB_WORKSPACE/alma8/build.sh
+
+          - name: Upload the Alma 8 artifact to the Github Action
+            uses: actions/upload-artifact@v2
+            with:
+              name: linuxpam-alma8
+              path: alma8/*.tar
+
+          # If this was a merge to main, make a release so that the
+          # artifact is kept permanently
+          - name: Create release tag
+            if: github.ref == 'refs/heads/main'
+            run: |
+              . $GITHUB_WORKSPACE/alma8/env.sh
+              echo "::set-output name=TAG::pam_${SOURCE_PACKAGE_VERSION}${CISCO_VERSION}-build.${{ github.run_number }}"
+            id: tag
+
+          - name: Upload the Alma 8 artifact to a Github release
+            uses: ncipollo/release-action@v1
+            if: github.ref == 'refs/heads/main'
+            with:
+              artifacts: "alma8/*.tar"
+              commit: ${{ github.sha }}
+              tag: ${{ steps.tag.outputs.TAG }}
+              token: ${{ github.token }}
