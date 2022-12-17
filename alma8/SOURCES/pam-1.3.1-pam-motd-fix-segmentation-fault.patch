@@ -1,0 +1,133 @@
+From 8eaf5570cf011148a0b55c53570df5edaafebdb0 Mon Sep 17 00:00:00 2001
+From: Robert Fairley <rfairley@users.noreply.github.com>
+Date: Wed, 21 Nov 2018 02:46:02 -0500
+Subject: [PATCH] pam_motd: Fix segmentation fault when no motd_dir specified
+ (#76)
+
+This fixes a regression introduced by #69, where motd_path was set
+to NULL and passed into strdup() if the motd_dir argument was
+not specified in the configuration file. This caused a segmentation
+fault.
+
+* modules/pam_motd/pam_motd.c: fix checks for NULL in arguments
+* xtests/Makefile.am: add test scripts and config file
+* xtests/tst-pam_motd.sh: add running tst-pam_motd4.sh
+* xtests/tst-pam_motd4.pamd: create
+* xtests/tst-pam_motd4.sh: create
+---
+ modules/pam_motd/pam_motd.c | 15 ++++++++++-----
+ xtests/Makefile.am          |  4 ++--
+ xtests/tst-pam_motd.sh      |  1 +
+ xtests/tst-pam_motd4.pamd   |  3 +++
+ xtests/tst-pam_motd4.sh     | 27 +++++++++++++++++++++++++++
+ 5 files changed, 43 insertions(+), 7 deletions(-)
+ create mode 100644 xtests/tst-pam_motd4.pamd
+ create mode 100755 xtests/tst-pam_motd4.sh
+
+diff --git a/modules/pam_motd/pam_motd.c b/modules/pam_motd/pam_motd.c
+index 1c1cfcfa..ec3ebd58 100644
+--- a/modules/pam_motd/pam_motd.c
++++ b/modules/pam_motd/pam_motd.c
+@@ -132,7 +132,6 @@ static int pam_split_string(const pam_handle_t *pamh, char *arg, char delim,
+ 	goto out;
+     }
+ 
+-
+     arg_extracted = strtok_r(arg, delim_str, &arg);
+     while (arg_extracted != NULL && i < num_strs) {
+ 	arg_split[i++] = arg_extracted;
+@@ -363,15 +362,21 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags,
+ 	motd_dir_path = default_motd_dir;
+     }
+ 
+-    motd_path_copy = strdup(motd_path);
++    if (motd_path != NULL) {
++	motd_path_copy = strdup(motd_path);
++    }
++
+     if (motd_path_copy != NULL) {
+-	if (pam_split_string(pamh, motd_path_copy, ':', &motd_path_split,
+-		&num_motd_paths) == 0) {
++	if (pam_split_string(pamh, motd_path_copy, ':',
++		&motd_path_split, &num_motd_paths) == 0) {
+ 	    goto out;
+ 	}
+     }
+ 
+-    motd_dir_path_copy = strdup(motd_dir_path);
++    if (motd_dir_path != NULL) {
++	motd_dir_path_copy = strdup(motd_dir_path);
++    }
++
+     if (motd_dir_path_copy != NULL) {
+ 	if (pam_split_string(pamh, motd_dir_path_copy, ':',
+ 		&motd_dir_path_split, &num_motd_dir_paths) == 0) {
+diff --git a/xtests/Makefile.am b/xtests/Makefile.am
+index 555d5e33..4d5aba3d 100644
+--- a/xtests/Makefile.am
++++ b/xtests/Makefile.am
+@@ -34,8 +34,8 @@ EXTRA_DIST = run-xtests.sh tst-pam_dispatch1.pamd tst-pam_dispatch2.pamd \
+ 	tst-pam_pwhistory1.pamd tst-pam_pwhistory1.sh \
+ 	tst-pam_time1.pamd time.conf \
+ 	tst-pam_motd.sh tst-pam_motd1.sh tst-pam_motd2.sh \
+-	tst-pam_motd3.sh tst-pam_motd1.pamd \
+-	tst-pam_motd2.pamd tst-pam_motd3.pamd
++	tst-pam_motd3.sh tst-pam_motd4.sh tst-pam_motd1.pamd \
++	tst-pam_motd2.pamd tst-pam_motd3.pamd tst-pam_motd4.pamd
+ 
+ XTESTS = tst-pam_dispatch1 tst-pam_dispatch2 tst-pam_dispatch3 \
+ 	tst-pam_dispatch4 tst-pam_dispatch5 \
+diff --git a/xtests/tst-pam_motd.sh b/xtests/tst-pam_motd.sh
+index 9b0c38f6..90801280 100755
+--- a/xtests/tst-pam_motd.sh
++++ b/xtests/tst-pam_motd.sh
+@@ -5,3 +5,4 @@ set -e
+ ./tst-pam_motd1.sh
+ ./tst-pam_motd2.sh
+ ./tst-pam_motd3.sh
++./tst-pam_motd4.sh
+diff --git a/xtests/tst-pam_motd4.pamd b/xtests/tst-pam_motd4.pamd
+new file mode 100644
+index 00000000..9dc311ad
+--- /dev/null
++++ b/xtests/tst-pam_motd4.pamd
+@@ -0,0 +1,3 @@
++#%PAM-1.0
++session    required    pam_permit.so
++session    optional    pam_motd.so motd=tst-pam_motd4.d/etc/motd
+diff --git a/xtests/tst-pam_motd4.sh b/xtests/tst-pam_motd4.sh
+new file mode 100755
+index 00000000..6022177f
+--- /dev/null
++++ b/xtests/tst-pam_motd4.sh
+@@ -0,0 +1,27 @@
++#!/bin/bash
++
++TST_DIR="tst-pam_motd4.d"
++
++function tst_cleanup() {
++    rm -rf "${TST_DIR}"
++    rm -f tst-pam_motd4.out
++}
++
++mkdir -p ${TST_DIR}/etc
++
++# Verify the case of single motd with no motd_dir given in tst-pam_motd4.pamd
++echo "motd: /etc/motd" > ${TST_DIR}/etc/motd
++
++./tst-pam_motd tst-pam_motd4 > tst-pam_motd4.out
++
++RET=$?
++
++motd_to_show_output=$(cat tst-pam_motd4.out | grep "motd: /etc/motd")
++if [ -z "${motd_to_show_output}" ];
++then
++    tst_cleanup
++    exit 1
++fi
++
++tst_cleanup
++exit $RET
+-- 
+2.35.1
+

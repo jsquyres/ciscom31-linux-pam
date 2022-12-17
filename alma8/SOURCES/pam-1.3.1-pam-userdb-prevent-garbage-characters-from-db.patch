@@ -1,0 +1,111 @@
+From a7453aeeb398d6cbb7a709c4e2a1d75905220fff Mon Sep 17 00:00:00 2001
+From: Stanislav Zidek <szidek@redhat.com>
+Date: Fri, 16 Apr 2021 19:14:18 +0200
+Subject: [PATCH] pam_userdb: Prevent garbage characters from db
+
+Resolves: https://bugzilla.redhat.com/show_bug.cgi?id=1791965
+---
+ modules/pam_userdb/pam_userdb.8.xml |  3 +-
+ modules/pam_userdb/pam_userdb.c     | 56 +++++++++++++++++------------
+ 2 files changed, 36 insertions(+), 23 deletions(-)
+
+diff --git a/modules/pam_userdb/pam_userdb.8.xml b/modules/pam_userdb/pam_userdb.8.xml
+index fa628ada..bce92850 100644
+--- a/modules/pam_userdb/pam_userdb.8.xml
++++ b/modules/pam_userdb/pam_userdb.8.xml
+@@ -100,7 +100,8 @@
+         </term>
+         <listitem>
+           <para>
+-            Print debug information.
++            Print debug information. Note that password hashes, both from db
++            and computed, will be printed to syslog.
+           </para>
+         </listitem>
+       </varlistentry>
+diff --git a/modules/pam_userdb/pam_userdb.c b/modules/pam_userdb/pam_userdb.c
+index dc2ca232..d59801bf 100644
+--- a/modules/pam_userdb/pam_userdb.c
++++ b/modules/pam_userdb/pam_userdb.c
+@@ -194,7 +194,7 @@ user_lookup (pam_handle_t *pamh, const char *database, const char *cryptmode,
+     }
+ 
+     if (data.dptr != NULL) {
+-	int compare = 0;
++	int compare = -2;
+ 
+ 	if (ctrl & PAM_KEY_ONLY_ARG)
+ 	  {
+@@ -209,36 +209,48 @@ user_lookup (pam_handle_t *pamh, const char *database, const char *cryptmode,
+ 	  char *cryptpw = NULL;
+ 
+ 	  if (data.dsize < 13) {
+-	    compare = -2;
++	    /* hash is too short */
++	    pam_syslog(pamh, LOG_INFO, "password hash in database is too short");
+ 	  } else if (ctrl & PAM_ICASE_ARG) {
+-	    compare = -2;
++	    pam_syslog(pamh, LOG_INFO,
++	       "case-insensitive comparison only works with plaintext passwords");
+ 	  } else {
++	    /* libdb is not guaranteed to produce null terminated strings */
++	    char *pwhash = strndup(data.dptr, data.dsize);
++
++	    if (pwhash == NULL) {
++	      pam_syslog(pamh, LOG_CRIT, "strndup failed: data.dptr");
++	    } else {
+ #ifdef HAVE_CRYPT_R
+-	    struct crypt_data *cdata = NULL;
+-	    cdata = malloc(sizeof(*cdata));
+-	    if (cdata != NULL) {
+-		cdata->initialized = 0;
+-		cryptpw = crypt_r(pass, data.dptr, cdata);
+-	    }
++	      struct crypt_data *cdata = NULL;
++	      cdata = malloc(sizeof(*cdata));
++	      if (cdata == NULL) {
++	        pam_syslog(pamh, LOG_CRIT, "malloc failed: struct crypt_data");
++	      } else {
++	        cdata->initialized = 0;
++	        cryptpw = crypt_r(pass, pwhash, cdata);
++	      }
+ #else
+-	    cryptpw = crypt (pass, data.dptr);
++	      cryptpw = crypt (pass, pwhash);
+ #endif
+-	    if (cryptpw && strlen(cryptpw) == (size_t)data.dsize) {
+-	      compare = memcmp(data.dptr, cryptpw, data.dsize);
+-	    } else {
+-	      compare = -2;
+-	      if (ctrl & PAM_DEBUG_ARG) {
+-		if (cryptpw)
+-		  pam_syslog(pamh, LOG_INFO, "lengths of computed and stored hashes differ");
+-		else
+-		  pam_syslog(pamh, LOG_INFO, "crypt() returned NULL");
++	      if (cryptpw && strlen(cryptpw) == (size_t)data.dsize) {
++	        compare = memcmp(data.dptr, cryptpw, data.dsize);
++	      } else {
++	        if (ctrl & PAM_DEBUG_ARG) {
++	          if (cryptpw) {
++	            pam_syslog(pamh, LOG_INFO, "lengths of computed and stored hashes differ");
++	            pam_syslog(pamh, LOG_INFO, "computed hash: %s", cryptpw);
++	          } else {
++	            pam_syslog(pamh, LOG_ERR, "crypt() returned NULL");
++	          }
++	        }
+ 	      }
+-	    }
+ #ifdef HAVE_CRYPT_R
+-	    free(cdata);
++	      free(cdata);
+ #endif
++	    }
++	    free(pwhash);
+ 	  }
+-
+ 	} else {
+ 
+ 	  /* Unknown password encryption method -
+-- 
+2.30.2
+
