@@ -1,0 +1,105 @@
+diff -up Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h.inline Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h
+--- Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h.inline	2022-05-26 10:44:31.702623614 +0200
++++ Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h	2022-05-26 10:44:31.703623621 +0200
+@@ -44,4 +44,17 @@
+ # define DIAG_POP_IGNORE_CAST_ALIGN	/* empty */
+ #endif
+ 
++/*
++ * Evaluates to
++ * 1, if the given two types are known to be the same
++ * 0, otherwise.
++ */
++#if PAM_GNUC_PREREQ(3, 0)
++# define PAM_IS_SAME_TYPE(x_, y_)					\
++	__builtin_types_compatible_p(__typeof__(x_), __typeof__(y_))
++#else
++/* Cannot tell whether these types are the same.  */
++# define PAM_IS_SAME_TYPE(x_, y_)	0
++#endif
++
+ #endif /* PAM_CC_COMPAT_H */
+diff -up Linux-PAM-1.3.1/libpam/include/pam_inline.h.inline Linux-PAM-1.3.1/libpam/include/pam_inline.h
+--- Linux-PAM-1.3.1/libpam/include/pam_inline.h.inline	2022-05-26 10:44:31.703623621 +0200
++++ Linux-PAM-1.3.1/libpam/include/pam_inline.h	2022-05-26 10:44:31.703623621 +0200
+@@ -0,0 +1,67 @@
++/*
++ * Copyright (c) 2020 Dmitry V. Levin <ldv@altlinux.org>
++ *
++ * Handy inline functions and macros providing some convenient functionality
++ * to libpam and its modules.
++ */
++
++#ifndef PAM_INLINE_H
++#define PAM_INLINE_H
++
++#include "pam_cc_compat.h"
++#include <string.h>
++
++/*
++ * Evaluates to
++ * - a syntax error if the argument is 0,
++ * 0, otherwise.
++ */
++#define PAM_FAIL_BUILD_ON_ZERO(e_)	(sizeof(int[-1 + 2 * !!(e_)]) * 0)
++
++/*
++ * Evaluates to
++ * 1, if the given type is known to be a non-array type
++ * 0, otherwise.
++ */
++#define PAM_IS_NOT_ARRAY(a_)		PAM_IS_SAME_TYPE((a_), &(a_)[0])
++
++/*
++ * Evaluates to
++ * - a syntax error if the argument is not an array,
++ * 0, otherwise.
++ */
++#define PAM_MUST_BE_ARRAY(a_)		PAM_FAIL_BUILD_ON_ZERO(!PAM_IS_NOT_ARRAY(a_))
++
++/* Evaluates to the number of elements in the specified array.  */
++#define PAM_ARRAY_SIZE(a_)		(sizeof(a_) / sizeof((a_)[0]) + PAM_MUST_BE_ARRAY(a_))
++
++/*
++ * Returns NULL if STR does not start with PREFIX,
++ * or a pointer to the first char in STR after PREFIX.
++ * The length of PREFIX is specified by PREFIX_LEN.
++ */
++static inline const char *
++pam_str_skip_prefix_len(const char *str, const char *prefix, size_t prefix_len)
++{
++	return strncmp(str, prefix, prefix_len) ? NULL : str + prefix_len;
++}
++
++#define pam_str_skip_prefix(str_, prefix_)	\
++	pam_str_skip_prefix_len((str_), (prefix_), sizeof(prefix_) - 1 + PAM_MUST_BE_ARRAY(prefix_))
++
++/*
++ * Returns NULL if STR does not start with PREFIX
++ * (ignoring the case of the characters),
++ * or a pointer to the first char in STR after PREFIX.
++ * The length of PREFIX is specified by PREFIX_LEN.
++ */
++static inline const char *
++pam_str_skip_icase_prefix_len(const char *str, const char *prefix, size_t prefix_len)
++{
++	return strncasecmp(str, prefix, prefix_len) ? NULL : str + prefix_len;
++}
++
++#define pam_str_skip_icase_prefix(str_, prefix_)	\
++	pam_str_skip_icase_prefix_len((str_), (prefix_), sizeof(prefix_) - 1 + PAM_MUST_BE_ARRAY(prefix_))
++
++#endif /* PAM_INLINE_H */
+diff -up Linux-PAM-1.3.1/libpam/Makefile.am.inline Linux-PAM-1.3.1/libpam/Makefile.am
+--- Linux-PAM-1.3.1/libpam/Makefile.am.inline	2022-05-26 10:44:31.702623614 +0200
++++ Linux-PAM-1.3.1/libpam/Makefile.am	2022-05-26 10:45:21.146977780 +0200
+@@ -18,7 +18,8 @@ include_HEADERS = include/security/_pam_
+ 	include/security/pam_ext.h include/security/pam_modutil.h
+ 
+ noinst_HEADERS = pam_prelude.h pam_private.h pam_tokens.h \
+-		pam_modutil_private.h include/pam_cc_compat.h
++		pam_modutil_private.h include/pam_cc_compat.h \
++		include/pam_inline.h
+ 
+ libpam_la_LDFLAGS = -no-undefined -version-info 84:2:84
+ libpam_la_LIBADD = @LIBAUDIT@ $(LIBPRELUDE_LIBS) @LIBDL@

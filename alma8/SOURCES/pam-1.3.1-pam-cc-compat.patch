@@ -1,0 +1,63 @@
+diff -up Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h.pam-cc-compat Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h
+--- Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h.pam-cc-compat	2022-05-26 10:43:50.436328027 +0200
++++ Linux-PAM-1.3.1/libpam/include/pam_cc_compat.h	2022-05-26 10:43:50.436328027 +0200
+@@ -0,0 +1,47 @@
++/*
++ * Copyright (c) 2020 Dmitry V. Levin <ldv@altlinux.org>
++ */
++
++#ifndef PAM_CC_COMPAT_H
++#define PAM_CC_COMPAT_H
++
++#include "config.h"
++#include <security/_pam_types.h>
++
++#if defined __clang__ && defined __clang_major__ && defined __clang_minor__
++# define PAM_CLANG_PREREQ(maj, min)					\
++	((__clang_major__ << 16) + __clang_minor__ >= ((maj) << 16) + (min))
++#else
++# define PAM_CLANG_PREREQ(maj, min)	0
++#endif
++
++#if PAM_GNUC_PREREQ(4, 6)
++# define DIAG_PUSH_IGNORE_CAST_QUAL					\
++	_Pragma("GCC diagnostic push");					\
++	_Pragma("GCC diagnostic ignored \"-Wcast-qual\"")
++# define DIAG_POP_IGNORE_CAST_QUAL					\
++	_Pragma("GCC diagnostic pop")
++# define DIAG_PUSH_IGNORE_CAST_ALIGN					\
++	_Pragma("GCC diagnostic push");					\
++	_Pragma("GCC diagnostic ignored \"-Wcast-align\"")
++# define DIAG_POP_IGNORE_CAST_ALIGN					\
++	_Pragma("GCC diagnostic pop")
++#elif PAM_CLANG_PREREQ(2, 6)
++# define DIAG_PUSH_IGNORE_CAST_QUAL					\
++	_Pragma("clang diagnostic push");				\
++	_Pragma("clang diagnostic ignored \"-Wcast-qual\"")
++# define DIAG_POP_IGNORE_CAST_QUAL					\
++	_Pragma("clang diagnostic pop")
++# define DIAG_PUSH_IGNORE_CAST_ALIGN					\
++	_Pragma("clang diagnostic push");				\
++	_Pragma("clang diagnostic ignored \"-Wcast-align\"")
++# define DIAG_POP_IGNORE_CAST_ALIGN					\
++	_Pragma("clang diagnostic pop")
++#else
++# define DIAG_PUSH_IGNORE_CAST_QUAL	/* empty */
++# define DIAG_POP_IGNORE_CAST_QUAL	/* empty */
++# define DIAG_PUSH_IGNORE_CAST_ALIGN	/* empty */
++# define DIAG_POP_IGNORE_CAST_ALIGN	/* empty */
++#endif
++
++#endif /* PAM_CC_COMPAT_H */
+diff -up Linux-PAM-1.3.1/libpam/Makefile.am.pam-cc-compat Linux-PAM-1.3.1/libpam/Makefile.am
+--- Linux-PAM-1.3.1/libpam/Makefile.am.pam-cc-compat	2022-05-26 10:43:50.436328027 +0200
++++ Linux-PAM-1.3.1/libpam/Makefile.am	2022-05-26 10:44:00.865402730 +0200
+@@ -18,7 +18,7 @@ include_HEADERS = include/security/_pam_
+ 	include/security/pam_ext.h include/security/pam_modutil.h
+ 
+ noinst_HEADERS = pam_prelude.h pam_private.h pam_tokens.h \
+-		pam_modutil_private.h
++		pam_modutil_private.h include/pam_cc_compat.h
+ 
+ libpam_la_LDFLAGS = -no-undefined -version-info 84:2:84
+ libpam_la_LIBADD = @LIBAUDIT@ $(LIBPRELUDE_LIBS) @LIBDL@
