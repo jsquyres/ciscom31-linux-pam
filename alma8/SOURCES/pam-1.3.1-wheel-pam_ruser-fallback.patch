@@ -1,0 +1,134 @@
+From 6bf9b454eb971083f0cce49faa2aa1cde329ff5d Mon Sep 17 00:00:00 2001
+From: ikerexxe <ipedrosa@redhat.com>
+Date: Wed, 26 Aug 2020 14:44:23 +0200
+Subject: [PATCH 1/3] pam_wheel: improve coding style
+
+modules/pam_wheel/pam_wheel.c: improve indentation and explicitly state
+condition statements
+---
+ modules/pam_wheel/pam_wheel.c | 36 ++++++++++++++++++-----------------
+ 1 file changed, 19 insertions(+), 17 deletions(-)
+
+diff --git a/modules/pam_wheel/pam_wheel.c b/modules/pam_wheel/pam_wheel.c
+index a025ebaf..94cb7d89 100644
+--- a/modules/pam_wheel/pam_wheel.c
++++ b/modules/pam_wheel/pam_wheel.c
+@@ -130,25 +130,27 @@ perform_check (pam_handle_t *pamh, int ctrl, const char *use_group)
+     }
+ 
+     if (ctrl & PAM_USE_UID_ARG) {
+-	tpwd = pam_modutil_getpwuid (pamh, getuid());
+-	if (!tpwd) {
+-	    if (ctrl & PAM_DEBUG_ARG) {
++        tpwd = pam_modutil_getpwuid (pamh, getuid());
++        if (tpwd == NULL) {
++            if (ctrl & PAM_DEBUG_ARG) {
+                 pam_syslog(pamh, LOG_NOTICE, "who is running me ?!");
+-	    }
+-	    return PAM_SERVICE_ERR;
+-	}
+-	fromsu = tpwd->pw_name;
++            }
++            return PAM_SERVICE_ERR;
++        }
++        fromsu = tpwd->pw_name;
+     } else {
+-	fromsu = pam_modutil_getlogin(pamh);
+-	if (fromsu) {
+-	    tpwd = pam_modutil_getpwnam (pamh, fromsu);
+-	}
+-	if (!fromsu || !tpwd) {
+-	    if (ctrl & PAM_DEBUG_ARG) {
+-		pam_syslog(pamh, LOG_NOTICE, "who is running me ?!");
+-	    }
+-	    return PAM_SERVICE_ERR;
+-	}
++        fromsu = pam_modutil_getlogin(pamh);
++
++        if (fromsu != NULL) {
++            tpwd = pam_modutil_getpwnam (pamh, fromsu);
++        }
++
++        if (fromsu == NULL || tpwd == NULL) {
++            if (ctrl & PAM_DEBUG_ARG) {
++                pam_syslog(pamh, LOG_NOTICE, "who is running me ?!");
++            }
++            return PAM_SERVICE_ERR;
++        }
+     }
+ 
+     /*
+-- 
+2.26.2
+
+
+From 9091ea1d81e85f49a221b0325d27b22ce69e444a Mon Sep 17 00:00:00 2001
+From: ikerexxe <ipedrosa@redhat.com>
+Date: Thu, 27 Aug 2020 09:16:15 +0200
+Subject: [PATCH 2/3] pam_wheel: if getlogin fails fallback to PAM_RUSER
+
+modules/pam_wheel/pam_wheel.c: if getlogin fails to obtain the real user
+ID, then try with PAM_RUSER.
+
+Resolves:
+https://bugzilla.redhat.com/show_bug.cgi?id=1866866
+---
+ modules/pam_wheel/pam_wheel.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/modules/pam_wheel/pam_wheel.c b/modules/pam_wheel/pam_wheel.c
+index 94cb7d89..7fa3cfa9 100644
+--- a/modules/pam_wheel/pam_wheel.c
++++ b/modules/pam_wheel/pam_wheel.c
+@@ -141,6 +141,16 @@ perform_check (pam_handle_t *pamh, int ctrl, const char *use_group)
+     } else {
+         fromsu = pam_modutil_getlogin(pamh);
+ 
++        /* if getlogin fails try a fallback to PAM_RUSER */
++        if (fromsu == NULL) {
++            const char *rhostname;
++
++            retval = pam_get_item(pamh, PAM_RHOST, (const void **)&rhostname);
++            if (retval != PAM_SUCCESS || rhostname == NULL) {
++                retval = pam_get_item(pamh, PAM_RUSER, (const void **)&fromsu);
++            }
++        }
++
+         if (fromsu != NULL) {
+             tpwd = pam_modutil_getpwnam (pamh, fromsu);
+         }
+-- 
+2.26.2
+
+
+From a3a5cbf86083c43026b558e2023f597530626267 Mon Sep 17 00:00:00 2001
+From: ikerexxe <ipedrosa@redhat.com>
+Date: Wed, 9 Sep 2020 10:32:03 +0200
+Subject: [PATCH 3/3] pam_wheel: clarify use_uid option in man page
+
+modules/pam_wheel/pam_wheel.8.xml: indicate that use_uid option uses the
+real uid of the calling process.
+---
+ modules/pam_wheel/pam_wheel.8.xml | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/modules/pam_wheel/pam_wheel.8.xml b/modules/pam_wheel/pam_wheel.8.xml
+index b32f5e2b..ee8c7d26 100644
+--- a/modules/pam_wheel/pam_wheel.8.xml
++++ b/modules/pam_wheel/pam_wheel.8.xml
+@@ -122,9 +122,9 @@
+         </term>
+         <listitem>
+           <para>
+-            The check for wheel membership will be done against
+-            the current uid instead of the original one (useful when
+-            jumping with su from one account to another for example).
++            The check will be done against the real uid of the calling process,
++            instead of trying to obtain the user from the login session
++            associated with the terminal in use.
+           </para>
+         </listitem>
+       </varlistentry>
+-- 
+2.26.2
+
