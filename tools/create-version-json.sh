@@ -15,7 +15,23 @@ if test -z "$SOURCE_PACKAGE_VERSION" -o -z "$CISCO_VERSION"; then
     exit 1
 fi
 
-SOURCE_GIT_REPO=$(git remote -v | grep fetch | awk '{ print $2 }')
+# Developers may have more than 1 remote.  Make a best guess as to
+# what the real repo is.
+file=git-remotes.$$.txt
+rm -f $file
+git remote -v | grep fetch | awk '{ print $2 }' > $file
+wcl=`wc -l $file | awk '{ print $1 }'`
+if test "$wcl" -eq 1; then
+    SOURCE_GIT_REPO=`cat $file`
+else
+    tmp="`grep CiscoM31 $file`"
+    if test -n $tmp; then
+        SOURCE_GIT_REPO=$tmp
+    else
+        SOURCE_GIT_REPO="`cat $file | head -n 1`"
+    fi
+fi
+rm -f $file
 SOURCE_GIT_DESCRIBE=$(git describe --always)
 SOURCE_GIT_HASH=$(git rev-parse HEAD)
 

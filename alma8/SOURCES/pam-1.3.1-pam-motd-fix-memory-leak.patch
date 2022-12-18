@@ -1,0 +1,57 @@
+From 62cd745d730e5ba13d5d7092ac566fc0b2148e61 Mon Sep 17 00:00:00 2001
+From: "Dmitry V. Levin" <ldv@altlinux.org>
+Date: Sun, 26 Apr 2020 11:12:59 +0000
+Subject: [PATCH] pam_motd: fix memory leak
+
+pam_motd used to leak memory allocated for each motd file
+successfully opened in try_to_display_directories_with_overrides.
+
+* modules/pam_motd/pam_motd.c
+(try_to_display_directories_with_overrides): Free abs_path.
+
+Fixes: f9c9c721 ("pam_motd: Support multiple motd paths specified, with filename overrides (#69)")
+---
+ modules/pam_motd/pam_motd.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/modules/pam_motd/pam_motd.c b/modules/pam_motd/pam_motd.c
+index f0cd317d..3be129a5 100644
+--- a/modules/pam_motd/pam_motd.c
++++ b/modules/pam_motd/pam_motd.c
+@@ -259,23 +259,23 @@ static void try_to_display_directories_with_overrides(pam_handle_t *pamh,
+ 
+ 	for (j = 0; j < num_motd_dirs; j++) {
+ 	    char *abs_path = NULL;
++	    int fd;
+ 
+ 	    if (join_dir_strings(&abs_path, motd_dir_path_split[j],
+-		    dirnames_all[i]) < 0) {
++		    dirnames_all[i]) < 0 || abs_path == NULL) {
+ 		continue;
+ 	    }
+ 
+-	    if (abs_path != NULL) {
+-		int fd = open(abs_path, O_RDONLY, 0);
+-		if (fd >= 0) {
+-		    try_to_display_fd(pamh, fd);
+-		    close(fd);
++	    fd = open(abs_path, O_RDONLY, 0);
++	    _pam_drop(abs_path);
+ 
+-		    /* We displayed a file, skip to the next file name. */
+-		    break;
+-		}
++	    if (fd >= 0) {
++		try_to_display_fd(pamh, fd);
++		close(fd);
++
++		/* We displayed a file, skip to the next file name. */
++		break;
+ 	    }
+-	    _pam_drop(abs_path);
+ 	}
+     }
+ 
+-- 
+2.35.3
+
