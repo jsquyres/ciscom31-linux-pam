@@ -1,0 +1,25 @@
+diff -up Linux-PAM-1.3.1/modules/pam_motd/pam_motd.8.xml.motd-manpage Linux-PAM-1.3.1/modules/pam_motd/pam_motd.8.xml
+--- Linux-PAM-1.3.1/modules/pam_motd/pam_motd.8.xml.motd-manpage	2018-05-18 11:50:46.000000000 +0200
++++ Linux-PAM-1.3.1/modules/pam_motd/pam_motd.8.xml	2019-12-19 10:29:36.243558251 +0100
+@@ -31,10 +31,19 @@
+     <para>
+       pam_motd is a PAM module that can be used to display
+       arbitrary motd (message of the day) files after a successful
+-      login. By default the <filename>/etc/motd</filename> file is
++      login. By default the <filename>/etc/motd</filename> file and
++      all files from <filename>/etc/motd.d</filename> are
+       shown. The message size is limited to 64KB.
+     </para>
+-
++    <para>
++      To silence a message,
++      a symbolic link with target <filename>/dev/null</filename>
++      may be placed in <filename>/etc/motd.d</filename> with
++      the same filename as the message to be silenced. Example:
++    </para>
++    <para>
++      <command>ln -sfn /dev/null /etc/motd.d/my_motd</command>
++    </para>
+   </refsect1>
+ 
+   <refsect1 id="pam_motd-options">

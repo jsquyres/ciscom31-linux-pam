@@ -1,0 +1,1186 @@
+diff -up Linux-PAM-1.3.1/modules/pam_faillock/faillock.c.faillock-update Linux-PAM-1.3.1/modules/pam_faillock/faillock.c
+--- Linux-PAM-1.3.1/modules/pam_faillock/faillock.c.faillock-update	2019-10-16 16:49:27.026893768 +0200
++++ Linux-PAM-1.3.1/modules/pam_faillock/faillock.c	2019-12-16 17:55:27.042001068 +0100
+@@ -1,5 +1,6 @@
+ /*
+  * Copyright (c) 2010 Tomas Mraz <tmraz@redhat.com>
++ * Copyright (c) 2010, 2016, 2017 Red Hat, Inc.
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions
+@@ -47,6 +48,8 @@
+ 
+ #include "faillock.h"
+ 
++#define ignore_return(x) if (1==((int)x)) {;}
++
+ int
+ open_tally (const char *dir, const char *user, uid_t uid, int create)
+ {
+@@ -54,7 +57,7 @@ open_tally (const char *dir, const char
+ 	int flags = O_RDWR;
+ 	int fd;
+ 
+-	if (strstr(user, "../") != NULL)
++	if (dir == NULL || strstr(user, "../") != NULL)
+ 	/* just a defensive programming as the user must be a
+ 	 * valid user on the system anyway
+ 	 */
+@@ -83,7 +86,7 @@ open_tally (const char *dir, const char
+ 		while (flock(fd, LOCK_EX) == -1 && errno == EINTR);
+ 		if (fstat(fd, &st) == 0) {
+ 			if (st.st_uid != uid) {
+-				fchown(fd, uid, -1);
++				ignore_return(fchown(fd, uid, -1));
+ 			}
+ 		}
+ 	}
+@@ -121,7 +124,7 @@ read_tally(int fd, struct tally_data *ta
+ 		if (count >= MAX_RECORDS)
+ 			break;
+ 	}
+-	while (chunk == CHUNK_SIZE); 
++	while (chunk == CHUNK_SIZE);
+ 
+ 	tallies->records = data;
+ 	tallies->count = count;
+diff -up Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf.5.xml.faillock-update Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf.5.xml
+--- Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf.5.xml.faillock-update	2019-10-16 17:34:58.073276020 +0200
++++ Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf.5.xml	2019-10-16 16:26:05.000000000 +0200
+@@ -0,0 +1,243 @@
++<?xml version="1.0" encoding='UTF-8'?>
++<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
++	"http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
++
++<refentry id="faillock.conf">
++
++  <refmeta>
++    <refentrytitle>faillock.conf</refentrytitle>
++    <manvolnum>5</manvolnum>
++    <refmiscinfo class="sectdesc">Linux-PAM Manual</refmiscinfo>
++  </refmeta>
++
++  <refnamediv id="faillock.conf-name">
++    <refname>faillock.conf</refname>
++    <refpurpose>pam_faillock configuration file</refpurpose>
++  </refnamediv>
++
++  <refsect1 id="faillock.conf-description">
++
++    <title>DESCRIPTION</title>
++    <para>
++       <emphasis remap='B'>faillock.conf</emphasis> provides a way to configure the
++       default settings for locking the user after multiple failed authentication attempts.
++       This file is read by the <emphasis>pam_faillock</emphasis> module and is the
++       preferred method over configuring <emphasis>pam_faillock</emphasis> directly.
++    </para>
++    <para>
++       The file has a very simple <emphasis>name = value</emphasis> format with possible comments
++       starting with <emphasis>#</emphasis> character. The whitespace at the beginning of line, end
++       of line, and around the <emphasis>=</emphasis> sign is ignored.
++    </para>
++  </refsect1>
++
++  <refsect1 id="faillock.conf-options">
++
++    <title>OPTIONS</title>
++         <variablelist>
++            <varlistentry>
++              <term>
++                <option>dir=<replaceable>/path/to/tally-directory</replaceable></option>
++              </term>
++              <listitem>
++                <para>
++                  The directory where the user files with the failure records are kept. The
++                  default is <filename>/var/run/faillock</filename>.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>audit</option>
++              </term>
++              <listitem>
++                <para>
++                  Will log the user name into the system log if the user is not found.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>silent</option>
++              </term>
++              <listitem>
++                <para>
++                  Don't print informative messages to the user. Please note that when
++                  this option is not used there will be difference in the authentication
++                  behavior for users which exist on the system and non-existing users.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>no_log_info</option>
++              </term>
++              <listitem>
++                <para>
++                  Don't log informative messages via <citerefentry><refentrytitle>syslog</refentrytitle><manvolnum>3</manvolnum></citerefentry>.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>local_users_only</option>
++              </term>
++              <listitem>
++                <para>
++                  Only track failed user authentications attempts for local users
++                  in /etc/passwd and ignore centralized (AD, IdM, LDAP, etc.) users.
++                  The <citerefentry><refentrytitle>faillock</refentrytitle><manvolnum>8</manvolnum></citerefentry>
++                  command will also no longer track user failed
++                  authentication attempts. Enabling this option will prevent a
++                  double-lockout scenario where a user is locked out locally and
++                  in the centralized mechanism.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>deny=<replaceable>n</replaceable></option>
++              </term>
++              <listitem>
++                <para>
++                  Deny access if the number of consecutive authentication failures
++                  for this user during the recent interval exceeds
++                  <replaceable>n</replaceable>. The default is 3.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>fail_interval=<replaceable>n</replaceable></option>
++              </term>
++              <listitem>
++                <para>
++                  The length of the interval during which the consecutive
++                  authentication failures must happen for the user account
++                  lock out is <replaceable>n</replaceable> seconds.
++                  The default is 900 (15 minutes).
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>unlock_time=<replaceable>n</replaceable></option>
++              </term>
++              <listitem>
++                <para>
++                  The access will be reenabled after
++                  <replaceable>n</replaceable> seconds after the lock out.
++                  The value 0 has the same meaning as value
++                  <emphasis>never</emphasis> - the access
++                  will not be reenabled without resetting the faillock
++                  entries by the <citerefentry><refentrytitle>faillock</refentrytitle><manvolnum>8</manvolnum></citerefentry> command.
++                  The default is 600 (10 minutes).
++                </para>
++                <para>
++                  Note that the default directory that <emphasis>pam_faillock</emphasis>
++                  uses is usually cleared on system boot so the access will be also reenabled
++                  after system reboot. If that is undesirable a different tally directory
++                  must be set with the <option>dir</option> option.
++                </para>
++                <para>
++                  Also note that it is usually undesirable to permanently lock
++                  out the users as they can become easily a target of denial of service
++                  attack unless the usernames are random and kept secret to potential
++                  attackers.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>even_deny_root</option>
++              </term>
++              <listitem>
++                <para>
++                  Root account can become locked as well as regular accounts.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>root_unlock_time=<replaceable>n</replaceable></option>
++              </term>
++              <listitem>
++                <para>
++                  This option implies <option>even_deny_root</option> option.
++                  Allow access after <replaceable>n</replaceable> seconds
++                  to root account after the account is locked. In case the
++                  option is not specified the value is the same as of the
++                  <option>unlock_time</option> option.
++                </para>
++              </listitem>
++            </varlistentry>
++            <varlistentry>
++              <term>
++                <option>admin_group=<replaceable>name</replaceable></option>
++              </term>
++              <listitem>
++                <para>
++                  If a group name is specified with this option, members
++                  of the group will be handled by this module the same as
++                  the root account (the options <option>even_deny_root</option>
++                  and <option>root_unlock_time</option> will apply to them.
++                  By default the option is not set.
++                </para>
++              </listitem>
++            </varlistentry>
++        </variablelist>
++  </refsect1>
++
++  <refsect1 id='faillock.conf-examples'>
++    <title>EXAMPLES</title>
++    <para>
++      /etc/security/faillock.conf file example:
++    </para>
++    <programlisting>
++deny=4
++unlock_time=1200
++silent
++    </programlisting>
++  </refsect1>
++
++  <refsect1 id="faillock.conf-files">
++    <title>FILES</title>
++    <variablelist>
++      <varlistentry>
++        <term><filename>/etc/security/faillock.conf</filename></term>
++        <listitem>
++          <para>the config file for custom options</para>
++        </listitem>
++      </varlistentry>
++    </variablelist>
++  </refsect1>
++
++  <refsect1 id='faillock.conf-see_also'>
++    <title>SEE ALSO</title>
++    <para>
++      <citerefentry>
++        <refentrytitle>faillock</refentrytitle><manvolnum>8</manvolnum>
++      </citerefentry>,
++      <citerefentry>
++        <refentrytitle>pam_faillock</refentrytitle><manvolnum>8</manvolnum>
++      </citerefentry>,
++      <citerefentry>
++        <refentrytitle>pam.conf</refentrytitle><manvolnum>5</manvolnum>
++      </citerefentry>,
++      <citerefentry>
++        <refentrytitle>pam.d</refentrytitle><manvolnum>5</manvolnum>
++      </citerefentry>,
++      <citerefentry>
++        <refentrytitle>pam</refentrytitle><manvolnum>8</manvolnum>
++      </citerefentry>
++    </para>
++  </refsect1>
++
++  <refsect1 id='faillock.conf-author'>
++    <title>AUTHOR</title>
++      <para>
++        pam_faillock was written by Tomas Mraz. The support for faillock.conf was written by Brian Ward.
++      </para>
++  </refsect1>
++
++</refentry>
+diff -up Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf.faillock-update Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf
+--- Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf.faillock-update	2019-10-16 17:34:50.607405060 +0200
++++ Linux-PAM-1.3.1/modules/pam_faillock/faillock.conf	2019-10-16 16:26:05.000000000 +0200
+@@ -0,0 +1,62 @@
++# Configuration for locking the user after multiple failed
++# authentication attempts.
++#
++# The directory where the user files with the failure records are kept.
++# The default is /var/run/faillock.
++# dir = /var/run/faillock
++#
++# Will log the user name into the system log if the user is not found.
++# Enabled if option is present.
++# audit
++#
++# Don't print informative messages.
++# Enabled if option is present.
++# silent
++#
++# Don't log informative messages via syslog.
++# Enabled if option is present.
++# no_log_info
++#
++# Only track failed user authentications attempts for local users
++# in /etc/passwd and ignore centralized (AD, IdM, LDAP, etc.) users.
++# The `faillock` command will also no longer track user failed
++# authentication attempts. Enabling this option will prevent a
++# double-lockout scenario where a user is locked out locally and
++# in the centralized mechanism.
++# Enabled if option is present.
++# local_users_only
++#
++# Deny access if the number of consecutive authentication failures
++# for this user during the recent interval exceeds n tries.
++# The default is 3.
++# deny = 3
++#
++# The length of the interval during which the consecutive
++# authentication failures must happen for the user account
++# lock out is <replaceable>n</replaceable> seconds.
++# The default is 900 (15 minutes).
++# fail_interval = 900
++#
++# The access will be reenabled after n seconds after the lock out.
++# The value 0 has the same meaning as value `never` - the access
++# will not be reenabled without resetting the faillock
++# entries by the `faillock` command.
++# The default is 600 (10 minutes).
++# unlock_time = 600
++#
++# Root account can become locked as well as regular accounts.
++# Enabled if option is present.
++# even_deny_root
++#
++# This option implies the `even_deny_root` option.
++# Allow access after n seconds to root account after the
++# account is locked. In case the option is not specified
++# the value is the same as of the `unlock_time` option.
++# root_unlock_time = 900
++#
++# If a group name is specified with this option, members
++# of the group will be handled by this module the same as
++# the root account (the options `even_deny_root>` and
++# `root_unlock_time` will apply to them.
++# By default, the option is not set.
++# admin_group = <admin_group_name>
+diff -up Linux-PAM-1.3.1/modules/pam_faillock/faillock.h.faillock-update Linux-PAM-1.3.1/modules/pam_faillock/faillock.h
+--- Linux-PAM-1.3.1/modules/pam_faillock/faillock.h.faillock-update	2019-10-16 16:49:27.026893768 +0200
++++ Linux-PAM-1.3.1/modules/pam_faillock/faillock.h	2019-10-16 16:51:40.431628566 +0200
+@@ -65,6 +65,7 @@ struct tally_data {
+ };
+ 
+ #define FAILLOCK_DEFAULT_TALLYDIR "/var/run/faillock"
++#define FAILLOCK_DEFAULT_CONF "/etc/security/faillock.conf"
+ 
+ int open_tally(const char *dir, const char *user, uid_t uid, int create);
+ int read_tally(int fd, struct tally_data *tallies);
+diff -up Linux-PAM-1.3.1/modules/pam_faillock/Makefile.am.faillock-update Linux-PAM-1.3.1/modules/pam_faillock/Makefile.am
+--- Linux-PAM-1.3.1/modules/pam_faillock/Makefile.am.faillock-update	2019-10-16 16:49:27.026893768 +0200
++++ Linux-PAM-1.3.1/modules/pam_faillock/Makefile.am	2019-10-16 16:50:15.065078080 +0200
+@@ -1,6 +1,6 @@
+ #
+ # Copyright (c) 2005, 2006, 2007, 2009 Thorsten Kukuk <kukuk@thkukuk.de>
+-# Copyright (c) 2008 Red Hat, Inc.
++# Copyright (c) 2008, 2018 Red Hat, Inc.
+ # Copyright (c) 2010 Tomas Mraz <tmraz@redhat.com>
+ #
+ 
+@@ -9,8 +9,8 @@ MAINTAINERCLEANFILES = $(MANS) README
+ 
+ EXTRA_DIST = README $(MANS) $(XMLS) tst-pam_faillock
+ 
+-man_MANS = pam_faillock.8 faillock.8
+-XMLS = README.xml pam_faillock.8.xml faillock.8.xml
++man_MANS = pam_faillock.8 faillock.8 faillock.conf.5
++XMLS = README.xml pam_faillock.8.xml faillock.8.xml faillock.conf.5.xml
+ 
+ TESTS = tst-pam_faillock
+ 
+@@ -31,6 +31,8 @@ endif
+ faillock_LDFLAGS = -Wl,-z,now @PIE_LDFLAGS@
+ faillock_LDADD = -L$(top_builddir)/libpam -lpam $(LIBAUDIT)
+ 
++secureconf_DATA = faillock.conf
++
+ securelib_LTLIBRARIES = pam_faillock.la
+ sbin_PROGRAMS = faillock
+ 
+diff -up Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.8.xml.faillock-update Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.8.xml
+--- Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.8.xml.faillock-update	2019-10-16 16:49:27.030893701 +0200
++++ Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.8.xml	2019-10-16 16:53:39.544606052 +0200
+@@ -126,141 +126,13 @@
+                 </para>
+               </listitem>
+             </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>dir=<replaceable>/path/to/tally-directory</replaceable></option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  The directory where the user files with the failure records are kept. The
+-                  default is <filename>/var/run/faillock</filename>.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>audit</option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  Will log the user name into the system log if the user is not found.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>silent</option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  Don't print informative messages. This option is implicite
+-                  in the <emphasis>authfail</emphasis> and <emphasis>authsucc</emphasis>
+-                  functions.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>no_log_info</option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  Don't log informative messages via <citerefentry><refentrytitle>syslog</refentrytitle><manvolnum>3</manvolnum></citerefentry>.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>deny=<replaceable>n</replaceable></option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  Deny access if the number of consecutive authentication failures
+-                  for this user during the recent interval exceeds
+-                  <replaceable>n</replaceable>. The default is 3.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>fail_interval=<replaceable>n</replaceable></option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  The length of the interval during which the consecutive
+-                  authentication failures must happen for the user account
+-                  lock out is <replaceable>n</replaceable> seconds.
+-                  The default is 900 (15 minutes).
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>unlock_time=<replaceable>n</replaceable></option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  The access will be reenabled after
+-                  <replaceable>n</replaceable> seconds after the lock out.
+-                  The value 0 has the same meaning as value
+-                  <emphasis>never</emphasis> - the access
+-                  will not be reenabled without resetting the faillock
+-                  entries by the <citerefentry><refentrytitle>faillock</refentrytitle><manvolnum>8</manvolnum></citerefentry> command.
+-                  The default is 600 (10 minutes).
+-                </para>
+-                <para>
+-                  Note that the default directory that <emphasis>pam_faillock</emphasis>
+-                  uses is usually cleared on system boot so the access will be also reenabled
+-                  after system reboot. If that is undesirable a different tally directory
+-                  must be set with the <option>dir</option> option.
+-                </para>
+-                <para>
+-                  Also note that it is usually undesirable to permanently lock
+-                  out the users as they can become easily a target of denial of service
+-                  attack unless the usernames are random and kept secret to potential
+-                  attackers.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>even_deny_root</option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  Root account can become locked as well as regular accounts.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>root_unlock_time=<replaceable>n</replaceable></option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  This option implies <option>even_deny_root</option> option.
+-                  Allow access after <replaceable>n</replaceable> seconds
+-                  to root account after the account is locked. In case the
+-                  option is not specified the value is the same as of the
+-                  <option>unlock_time</option> option.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+-            <varlistentry>
+-              <term>
+-                <option>admin_group=<replaceable>name</replaceable></option>
+-              </term>
+-              <listitem>
+-                <para>
+-                  If a group name is specified with this option, members
+-                  of the group will be handled by this module the same as
+-                  the root account (the options <option>even_deny_root></option>
+-                  and <option>root_unlock_time</option> will apply to them.
+-                  By default the option is not set.
+-                </para>
+-              </listitem>
+-            </varlistentry>
+         </variablelist>
++        <para>
++          The options for configuring the module behavior are described in the 
++          <citerefentry><refentrytitle>faillock.conf</refentrytitle><manvolnum>5</manvolnum>
++          </citerefentry> manual page. The options specified on the module command
++          line override the values from the configuration file.
++        </para>
+   </refsect1>
+ 
+   <refsect1 id="pam_faillock-types">
+@@ -306,19 +178,23 @@
+   <refsect1 id='pam_faillock-notes'>
+     <title>NOTES</title>
+     <para>
+-      <emphasis>pam_faillock</emphasis> setup in the PAM stack is different
++      Configuring options on the module command line is not recommend. The
++      <emphasis>/etc/security/faillock.conf</emphasis> should be used instead.
++    </para>
++    <para>
++      The setup of <emphasis>pam_faillock</emphasis> in the PAM stack is different
+       from the <emphasis>pam_tally2</emphasis> module setup.
+     </para>
+     <para>
+-      The individual files with the failure records are created as owned by
++      Individual files with the failure records are created as owned by
+       the user. This allows <emphasis remap='B'>pam_faillock.so</emphasis> module
+       to work correctly when it is called from a screensaver.
+     </para>
+     <para>
+       Note that using the module in <option>preauth</option> without the
+-      <option>silent</option> option or with <emphasis>requisite</emphasis>
+-      control field leaks an information about existence or
+-      non-existence of an user account in the system because
++      <option>silent</option> option specified in <filename>/etc/security/faillock.conf</filename>
++      or with <emphasis>requisite</emphasis> control field leaks an information about
++      existence or non-existence of an user account in the system because
+       the failures are not recorded for the unknown users. The message
+       about the user account being locked is never displayed for nonexisting
+       user accounts allowing the adversary to infer that a particular account
+@@ -341,15 +217,26 @@
+       be added to tell the user that his login is blocked by the module and also to abort
+       the authentication without even asking for password in such case.
+     </para>
++    <para>
++      /etc/security/faillock.conf file example:
++    </para>
++    <programlisting>
++deny=4
++unlock_time=1200
++silent
++    </programlisting>
++    <para>
++      /etc/pam.d/config file example:
++    </para>
+     <programlisting>
+ auth     required       pam_securetty.so
+ auth     required       pam_env.so
+ auth     required       pam_nologin.so
+-# optionally call: auth requisite pam_faillock.so preauth deny=4 even_deny_root unlock_time=1200
++# optionally call: auth requisite pam_faillock.so preauth
+ # to display the message about account being locked
+ auth     [success=1 default=bad] pam_unix.so
+-auth     [default=die]  pam_faillock.so authfail deny=4 even_deny_root unlock_time=1200
+-auth     sufficient     pam_faillock.so authsucc deny=4 even_deny_root unlock_time=1200
++auth     [default=die]  pam_faillock.so authfail
++auth     sufficient     pam_faillock.so authsucc
+ auth     required       pam_deny.so
+ account  required       pam_unix.so
+ password required       pam_unix.so shadow
+@@ -361,17 +248,18 @@ session  required       pam_selinux.so o
+     <para>
+       In the second example the module is called both in the <emphasis>auth</emphasis>
+       and <emphasis>account</emphasis> phases and the module gives the authenticating
+-      user message when the account is locked 
++      user message when the account is locked if <option>silent</option> option is not
++      specified in the <filename>faillock.conf</filename>.
+     </para>
+     <programlisting>
+ auth     required       pam_securetty.so
+ auth     required       pam_env.so
+ auth     required       pam_nologin.so
+-auth     required       pam_faillock.so preauth silent deny=4 even_deny_root unlock_time=1200
++auth     required       pam_faillock.so preauth
+ # optionally use requisite above if you do not want to prompt for the password
+-# on locked accounts, possibly with removing the silent option as well
++# on locked accounts
+ auth     sufficient     pam_unix.so
+-auth     [default=die]  pam_faillock.so authfail deny=4 even_deny_root unlock_time=1200
++auth     [default=die]  pam_faillock.so authfail
+ auth     required       pam_deny.so
+ account  required       pam_faillock.so
+ # if you drop the above call to pam_faillock.so the lock will be done also
+@@ -394,6 +282,12 @@ session  required       pam_selinux.so o
+           <para>the files logging the authentication failures for users</para>
+         </listitem>
+       </varlistentry>
++      <varlistentry>
++        <term><filename>/etc/security/faillock.conf</filename></term>
++        <listitem>
++          <para>the config file for pam_faillock options</para>
++        </listitem>
++      </varlistentry>
+     </variablelist>
+   </refsect1>
+ 
+@@ -404,6 +298,9 @@ session  required       pam_selinux.so o
+         <refentrytitle>faillock</refentrytitle><manvolnum>8</manvolnum>
+       </citerefentry>,
+       <citerefentry>
++        <refentrytitle>faillock.conf</refentrytitle><manvolnum>5</manvolnum>
++      </citerefentry>,
++      <citerefentry>
+         <refentrytitle>pam.conf</refentrytitle><manvolnum>5</manvolnum>
+       </citerefentry>,
+       <citerefentry>
+diff -up Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.c.faillock-update Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.c
+--- Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.c.faillock-update	2019-10-16 16:49:27.030893701 +0200
++++ Linux-PAM-1.3.1/modules/pam_faillock/pam_faillock.c	2019-12-16 17:55:11.403270018 +0100
+@@ -1,5 +1,6 @@
+ /*
+- * Copyright (c) 2010, 2017 Tomas Mraz <tmraz@redhat.com>
++ * Copyright (c) 2010, 2017, 2019 Tomas Mraz <tmraz@redhat.com>
++ * Copyright (c) 2010, 2017, 2019 Red Hat, Inc.
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions
+@@ -43,6 +44,7 @@
+ #include <time.h>
+ #include <pwd.h>
+ #include <syslog.h>
++#include <ctype.h>
+ 
+ #ifdef HAVE_LIBAUDIT
+ #include <libaudit.h>
+@@ -66,8 +68,14 @@
+ #define FAILLOCK_FLAG_SILENT		0x4
+ #define FAILLOCK_FLAG_NO_LOG_INFO	0x8
+ #define FAILLOCK_FLAG_UNLOCKED		0x10
++#define FAILLOCK_FLAG_LOCAL_ONLY	0x20
+ 
+ #define MAX_TIME_INTERVAL 604800 /* 7 days */
++#define FAILLOCK_CONF_MAX_LINELEN 1023
++#define FAILLOCK_ERROR_CONF_OPEN -3
++#define FAILLOCK_ERROR_CONF_MALFORMED -4
++
++#define PATH_PASSWD "/etc/passwd"
+ 
+ struct options {
+ 	unsigned int action;
+@@ -76,117 +84,295 @@ struct options {
+ 	unsigned int fail_interval;
+ 	unsigned int unlock_time;
+ 	unsigned int root_unlock_time;
+-	const char *dir;
++	char *dir;
++	const char *conf;
+ 	const char *user;
+-	const char *admin_group;
++	char *admin_group;
+ 	int failures;
+ 	uint64_t latest_time;
+ 	uid_t uid;
+ 	int is_admin;
+ 	uint64_t now;
++	int fatal_error;
+ };
+ 
++int read_config_file(
++	pam_handle_t *pamh,
++	struct options *opts,
++	const char *cfgfile
++);
++
++void set_conf_opt(
++	pam_handle_t *pamh,
++	struct options *opts,
++	const char *name,
++	const char *value
++);
++
+ static void
+ args_parse(pam_handle_t *pamh, int argc, const char **argv,
+ 		int flags, struct options *opts)
+ {
+ 	int i;
++	int rv;
+ 	memset(opts, 0, sizeof(*opts));
+ 
+-	opts->dir = FAILLOCK_DEFAULT_TALLYDIR;
++	opts->dir = strdup(FAILLOCK_DEFAULT_TALLYDIR);
++	opts->conf = FAILLOCK_DEFAULT_CONF;
+ 	opts->deny = 3;
+ 	opts->fail_interval = 900;
+ 	opts->unlock_time = 600;
+ 	opts->root_unlock_time = MAX_TIME_INTERVAL+1;
+ 
+-	for (i = 0; i < argc; ++i) {
++	if ((rv=read_config_file(pamh, opts, opts->conf)) != PAM_SUCCESS) {
++		pam_syslog(pamh, LOG_DEBUG,
++					"Configuration file missing");
++	}
+ 
+-		if (strncmp(argv[i], "dir=", 4) == 0) {
+-			if (argv[i][4] != '/') {
+-				pam_syslog(pamh, LOG_ERR,
+-					"Tally directory is not absolute path (%s); keeping default", argv[i]);
+-	        	} else {
+-			        opts->dir = argv[i]+4;
+-			}
+-		} 
+-		else if (strncmp(argv[i], "deny=", 5) == 0) {
+-			if (sscanf(argv[i]+5, "%hu", &opts->deny) != 1) {
+-				pam_syslog(pamh, LOG_ERR,
+-					"Bad number supplied for deny argument");
+-        		}
+-		}
+-		else if (strncmp(argv[i], "fail_interval=", 14) == 0) {
+-			unsigned int temp;
+-			if (sscanf(argv[i]+14, "%u", &temp) != 1 ||
+-				temp > MAX_TIME_INTERVAL) {
+-				pam_syslog(pamh, LOG_ERR,
+-					"Bad number supplied for fail_interval argument");
+-	        	} else {
+-				opts->fail_interval = temp;
+-			}
++	for (i = 0; i < argc; ++i) {
++		if (strcmp(argv[i], "preauth") == 0) {
++			opts->action = FAILLOCK_ACTION_PREAUTH;
++		}
++		else if (strcmp(argv[i], "authfail") == 0) {
++			opts->action = FAILLOCK_ACTION_AUTHFAIL;
++		}
++		else if (strcmp(argv[i], "authsucc") == 0) {
++			opts->action = FAILLOCK_ACTION_AUTHSUCC;
+ 		}
+-		else if (strncmp(argv[i], "unlock_time=", 12) == 0) {
+-			unsigned int temp;
++		else {
++			char buf[FAILLOCK_CONF_MAX_LINELEN + 1];
++			char *val;
+ 
+-			if (strcmp(argv[i]+12, "never") == 0) {
+-				opts->unlock_time = 0;
+-			}
+-			else if (sscanf(argv[i]+12, "%u", &temp) != 1 ||
+-				temp > MAX_TIME_INTERVAL) {
+-				pam_syslog(pamh, LOG_ERR,
+-					"Bad number supplied for unlock_time argument");
++			strncpy(buf, argv[i], sizeof(buf) - 1);
++			buf[sizeof(buf) - 1] = '\0';
++
++			val = strchr(buf, '=');
++			if (val != NULL) {
++				*val = '\0';
++				++val;
+ 			}
+ 			else {
+-				opts->unlock_time = temp;
++				val = buf + sizeof(buf) - 1;
+ 			}
++			set_conf_opt(pamh, opts, buf, val);
+ 		}
+-		else if (strncmp(argv[i], "root_unlock_time=", 17) == 0) {
+-			unsigned int temp;
++	}
+ 
+-			if (strcmp(argv[i]+17, "never") == 0) {
+-				opts->root_unlock_time = 0;
+-			}
+-			else if (sscanf(argv[i]+17, "%u", &temp) != 1 ||
+-				temp > MAX_TIME_INTERVAL) {
+-				pam_syslog(pamh, LOG_ERR,
+-					"Bad number supplied for root_unlock_time argument");
++	if (opts->root_unlock_time == MAX_TIME_INTERVAL+1)
++		opts->root_unlock_time = opts->unlock_time;
++	if (flags & PAM_SILENT)
++		opts->flags |= FAILLOCK_FLAG_SILENT;
++
++	if (opts->dir == NULL) {
++		pam_syslog(pamh, LOG_CRIT, "Error allocating memory: %m");
++		opts->fatal_error = 1;
++	}
++}
++
++/* parse a single configuration file */
++int
++read_config_file(pam_handle_t *pamh, struct options *opts, const char *cfgfile)
++{
++	FILE *f;
++	char linebuf[FAILLOCK_CONF_MAX_LINELEN+1];
++
++	f = fopen(cfgfile, "r");
++	if (f == NULL) {
++		/* ignore non-existent default config file */
++		if (errno == ENOENT && strcmp(cfgfile, FAILLOCK_DEFAULT_CONF) == 0)
++			return 0;
++		return FAILLOCK_ERROR_CONF_OPEN;
++	}
++
++	while (fgets(linebuf, sizeof(linebuf), f) != NULL) {
++		size_t len;
++		char *ptr;
++		char *name;
++		int eq;
++
++		len = strlen(linebuf);
++		/* len cannot be 0 unless there is a bug in fgets */
++		if (len && linebuf[len - 1] != '\n' && !feof(f)) {
++			(void) fclose(f);
++			return FAILLOCK_ERROR_CONF_MALFORMED;
++		}
++
++		if ((ptr=strchr(linebuf, '#')) != NULL) {
++			*ptr = '\0';
++		} else {
++			ptr = linebuf + len;
++		}
++
++		/* drop terminating whitespace including the \n */
++		while (ptr > linebuf) {
++			if (!isspace(*(ptr-1))) {
++				*ptr = '\0';
++				break;
++			}
++			--ptr;
++		}
++
++		/* skip initial whitespace */
++		for (ptr = linebuf; isspace(*ptr); ptr++);
++		if (*ptr == '\0')
++			continue;
++
++		/* grab the key name */
++		eq = 0;
++		name = ptr;
++		while (*ptr != '\0') {
++			if (isspace(*ptr) || *ptr == '=') {
++				eq = *ptr == '=';
++				*ptr = '\0';
++				++ptr;
++				break;
++			}
++			++ptr;
++		}
++
++		/* grab the key value */
++		while (*ptr != '\0') {
++			if (*ptr != '=' || eq) {
++				if (!isspace(*ptr)) {
++					break;
++				}
+ 			} else {
+-				opts->root_unlock_time = temp;
++				eq = 1;
+ 			}
++			++ptr;
+ 		}
+-		else if (strncmp(argv[i], "admin_group=", 12) == 0) {
+-			opts->admin_group = argv[i] + 12;
++
++		/* set the key:value pair on opts */
++		set_conf_opt(pamh, opts, name, ptr);
++	}
++
++	(void)fclose(f);
++	return PAM_SUCCESS;
++}
++
++void set_conf_opt(pam_handle_t *pamh, struct options *opts, const char *name, const char *value)
++{
++	if (strcmp(name, "dir") == 0) {
++		if (value[0] != '/') {
++			pam_syslog(pamh, LOG_ERR,
++				"Tally directory is not absolute path (%s); keeping default", value);
++		} else {
++			free(opts->dir);
++			opts->dir = strdup(value);
+ 		}
+- 		else if (strcmp(argv[i], "preauth") == 0) {
+-			opts->action = FAILLOCK_ACTION_PREAUTH;
++	}
++	else if (strcmp(name, "deny") == 0) {
++		if (sscanf(value, "%hu", &opts->deny) != 1) {
++			pam_syslog(pamh, LOG_ERR,
++				"Bad number supplied for deny argument");
++		}
++	}
++	else if (strcmp(name, "fail_interval") == 0) {
++		unsigned int temp;
++		if (sscanf(value, "%u", &temp) != 1 ||
++			temp > MAX_TIME_INTERVAL) {
++			pam_syslog(pamh, LOG_ERR,
++				"Bad number supplied for fail_interval argument");
++		} else {
++			opts->fail_interval = temp;
+ 		}
+- 		else if (strcmp(argv[i], "authfail") == 0) {
+-			opts->action = FAILLOCK_ACTION_AUTHFAIL;
++	}
++	else if (strcmp(name, "unlock_time") == 0) {
++		unsigned int temp;
++
++		if (strcmp(value, "never") == 0) {
++			opts->unlock_time = 0;
+ 		}
+-	 	else if (strcmp(argv[i], "authsucc") == 0) {
+-			opts->action = FAILLOCK_ACTION_AUTHSUCC;
++		else if (sscanf(value, "%u", &temp) != 1 ||
++			temp > MAX_TIME_INTERVAL) {
++			pam_syslog(pamh, LOG_ERR,
++				"Bad number supplied for unlock_time argument");
+ 		}
+-	 	else if (strcmp(argv[i], "even_deny_root") == 0) {
+-			opts->flags |= FAILLOCK_FLAG_DENY_ROOT;
++		else {
++			opts->unlock_time = temp;
+ 		}
+-	 	else if (strcmp(argv[i], "audit") == 0) {
+-			opts->flags |= FAILLOCK_FLAG_AUDIT;
++	}
++	else if (strcmp(name, "root_unlock_time") == 0) {
++		unsigned int temp;
++
++		if (strcmp(value, "never") == 0) {
++			opts->root_unlock_time = 0;
+ 		}
+-	 	else if (strcmp(argv[i], "silent") == 0) {
+-			opts->flags |= FAILLOCK_FLAG_SILENT;
++		else if (sscanf(value, "%u", &temp) != 1 ||
++			temp > MAX_TIME_INTERVAL) {
++			pam_syslog(pamh, LOG_ERR,
++				"Bad number supplied for root_unlock_time argument");
++		} else {
++			opts->root_unlock_time = temp;
+ 		}
+-	 	else if (strcmp(argv[i], "no_log_info") == 0) {
+-			opts->flags |= FAILLOCK_FLAG_NO_LOG_INFO;
++	}
++	else if (strcmp(name, "admin_group") == 0) {
++		free(opts->admin_group);
++		opts->admin_group = strdup(value);
++		if (opts->admin_group == NULL) {
++			opts->fatal_error = 1;
++			pam_syslog(pamh, LOG_CRIT, "Error allocating memory: %m");
+ 		}
+-		else {
+-			pam_syslog(pamh, LOG_ERR, "Unknown option: %s", argv[i]);
++	}
++	else if (strcmp(name, "even_deny_root") == 0) {
++		opts->flags |= FAILLOCK_FLAG_DENY_ROOT;
++	}
++	else if (strcmp(name, "audit") == 0) {
++		opts->flags |= FAILLOCK_FLAG_AUDIT;
++	}
++	else if (strcmp(name, "silent") == 0) {
++		opts->flags |= FAILLOCK_FLAG_SILENT;
++	}
++	else if (strcmp(name, "no_log_info") == 0) {
++		opts->flags |= FAILLOCK_FLAG_NO_LOG_INFO;
++	}
++	else if (strcmp(name, "local_users_only") == 0) {
++		opts->flags |= FAILLOCK_FLAG_LOCAL_ONLY;
++	}
++	else {
++		pam_syslog(pamh, LOG_ERR, "Unknown option: %s", name);
++	}
++}
++
++static int check_local_user (pam_handle_t *pamh, const char *user)
++{
++	struct passwd pw, *pwp;
++	char buf[4096];
++	int found = 0;
++	FILE *fp;
++	int errn;
++
++	fp = fopen(PATH_PASSWD, "r");
++	if (fp == NULL) {
++		pam_syslog(pamh, LOG_ERR, "unable to open %s: %m",
++			   PATH_PASSWD);
++		return -1;
++	}
++
++	for (;;) {
++		errn = fgetpwent_r(fp, &pw, buf, sizeof (buf), &pwp);
++		if (errn == ERANGE) {
++			pam_syslog(pamh, LOG_WARNING, "%s contains very long lines; corrupted?",
++				   PATH_PASSWD);
++			/* we can continue here as next call will read further */
++			continue;
++		}
++		if (errn != 0)
++			break;
++		if (strcmp(pwp->pw_name, user) == 0) {
++			found = 1;
++			break;
+ 		}
+ 	}
+ 
+-	if (opts->root_unlock_time == MAX_TIME_INTERVAL+1)
+-		opts->root_unlock_time = opts->unlock_time;
+-	if (flags & PAM_SILENT)
+-		opts->flags |= FAILLOCK_FLAG_SILENT;
++	fclose (fp);
++
++	if (errn != 0 && errn != ENOENT) {
++		pam_syslog(pamh, LOG_ERR, "unable to enumerate local accounts: %m");
++		return -1;
++	} else {
++		return found;
++	}
+ }
+ 
+ static int get_pam_user(pam_handle_t *pamh, struct options *opts)
+@@ -393,7 +579,7 @@ write_tally(pam_handle_t *pamh, struct o
+ 
+ 	strncpy(tallies->records[oldest].source, source, sizeof(tallies->records[oldest].source));
+ 	/* source does not have to be null terminated */
+-	
++
+ 	tallies->records[oldest].time = opts->now;
+ 
+ 	++failures;
+@@ -468,6 +654,13 @@ tally_cleanup(struct tally_data *tallies
+ 	free(tallies->records);
+ }
+ 
++static void
++opts_cleanup(struct options *opts)
++{
++	free(opts->dir);
++	free(opts->admin_group);
++}
++
+ /*---------------------------------------------------------------------*/
+ 
+ PAM_EXTERN int
+@@ -481,39 +674,49 @@ pam_sm_authenticate(pam_handle_t *pamh,
+ 	memset(&tallies, 0, sizeof(tallies));
+ 
+ 	args_parse(pamh, argc, argv, flags, &opts);
++	if (opts.fatal_error) {
++		rv = PAM_BUF_ERR;
++		goto err;
++	}
+ 
+ 	pam_fail_delay(pamh, 2000000);	/* 2 sec delay for on failure */
+ 
+ 	if ((rv=get_pam_user(pamh, &opts)) != PAM_SUCCESS) {
+-		return rv;
++		goto err;
+ 	}
+ 
+-	switch (opts.action) {
+-		case FAILLOCK_ACTION_PREAUTH:
+-			rv = check_tally(pamh, &opts, &tallies, &fd);
+-			if (rv == PAM_AUTH_ERR && !(opts.flags & FAILLOCK_FLAG_SILENT)) {
+-				faillock_message(pamh, &opts);
+-			}
+-                        break;
+-
+-		case FAILLOCK_ACTION_AUTHSUCC:
+-			rv = check_tally(pamh, &opts, &tallies, &fd);
+-			if (rv == PAM_SUCCESS) {
+-				reset_tally(pamh, &opts, &fd);
+-			}
+-                        break;
+-
+-		case FAILLOCK_ACTION_AUTHFAIL:
+-			rv = check_tally(pamh, &opts, &tallies, &fd);
+-			if (rv == PAM_SUCCESS) {
+-				rv = PAM_IGNORE; /* this return value should be ignored */
+-				write_tally(pamh, &opts, &tallies, &fd);
+-			}
+-			break;
++	if (!(opts.flags & FAILLOCK_FLAG_LOCAL_ONLY) ||
++		check_local_user (pamh, opts.user) != 0) {
++		switch (opts.action) {
++			case FAILLOCK_ACTION_PREAUTH:
++				rv = check_tally(pamh, &opts, &tallies, &fd);
++				if (rv == PAM_AUTH_ERR && !(opts.flags & FAILLOCK_FLAG_SILENT)) {
++					faillock_message(pamh, &opts);
++				}
++				break;
++
++			case FAILLOCK_ACTION_AUTHSUCC:
++				rv = check_tally(pamh, &opts, &tallies, &fd);
++				if (rv == PAM_SUCCESS) {
++					reset_tally(pamh, &opts, &fd);
++				}
++				break;
++
++			case FAILLOCK_ACTION_AUTHFAIL:
++				rv = check_tally(pamh, &opts, &tallies, &fd);
++				if (rv == PAM_SUCCESS) {
++					rv = PAM_IGNORE; /* this return value should be ignored */
++					write_tally(pamh, &opts, &tallies, &fd);
++				}
++				break;
++		}
+ 	}
+ 
+ 	tally_cleanup(&tallies, fd);
+ 
++err:
++	opts_cleanup(&opts);
++
+ 	return rv;
+ }
+ 
+@@ -540,18 +743,29 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int
+ 
+ 	args_parse(pamh, argc, argv, flags, &opts);
+ 
++	if (opts.fatal_error) {
++		rv = PAM_BUF_ERR;
++		goto err;
++	}
++
+ 	opts.action = FAILLOCK_ACTION_AUTHSUCC;
+ 
+ 	if ((rv=get_pam_user(pamh, &opts)) != PAM_SUCCESS) {
+-		return rv;
++		goto err;
+ 	}
+ 
+-	check_tally(pamh, &opts, &tallies, &fd); /* for auditing */
+-	reset_tally(pamh, &opts, &fd);
++	if (!(opts.flags & FAILLOCK_FLAG_LOCAL_ONLY) ||
++		check_local_user (pamh, opts.user) != 0) {
++		check_tally(pamh, &opts, &tallies, &fd); /* for auditing */
++		reset_tally(pamh, &opts, &fd);
++	}
+ 
+ 	tally_cleanup(&tallies, fd);
+ 
+-	return PAM_SUCCESS;
++err:
++	opts_cleanup(&opts);
++
++	return rv;
+ }
+ 
+ /*-----------------------------------------------------------------------*/
